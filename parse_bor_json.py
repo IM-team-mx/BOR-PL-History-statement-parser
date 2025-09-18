@@ -6,6 +6,7 @@ import pandas as pd
 input_file = "input/BOR_statement_Historical_PL.json"
 output_file_beneficial_owner_securities = "outputs/parsed_output_beneficial_owner_securities.csv"
 output_file_realized_pl = "outputs/parsed_output_realized_pl.csv"
+output_file_historical_pl = "outputs/historical_pl.csv"
 
 
 # CSV columns
@@ -126,4 +127,4 @@ df_merged = pd.merge(df_beneficial_owner_securities, df_realized, on=["Portfolio
 df_sorted = df_merged.sort_values(by=["Portfolio", "Instrument", "Lot ID", "Date"])
 df_grouped = df_sorted.groupby(["Portfolio", "Instrument", "Contributor ID", "Event", "Date", "Unit"])[["Quantity", "Realized PL"]].sum().reset_index()
 df_filtered = df_grouped[df_grouped["Realized PL"] != 0]
-df_filtered.to_csv("historical_pl.csv", index=False)
+df_filtered.to_csv(output_file_historical_pl, index=False)
