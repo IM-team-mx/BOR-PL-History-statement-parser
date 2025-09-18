@@ -3,9 +3,9 @@ import csv
 import pandas as pd
 
 # Input and output file paths
-input_file = "BOR_statement_Historical_PL.json"
-output_file_beneficial_owner_securities = "parsed_output_beneficial_owner_securities.csv"
-output_file_realized_pl = "parsed_output_realized_pl.csv"
+input_file = "input/BOR_statement_Historical_PL.json"
+output_file_beneficial_owner_securities = "outputs/parsed_output_beneficial_owner_securities.csv"
+output_file_realized_pl = "outputs/parsed_output_realized_pl.csv"
 
 
 # CSV columns
