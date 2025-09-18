@@ -17,6 +17,27 @@
             </Attribute>
           </value>
         </entry>
+        <entry key="\outputs\historical_pl.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="\outputs\parsed_output_beneficial_owner_securities.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="\outputs\parsed_output_realized_pl.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
         <entry key="\parsed_output.csv">
           <value>
             <Attribute>
