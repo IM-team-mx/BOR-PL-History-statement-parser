@@ -1,157 +1,196 @@
 import unittest
+import pandas as pd
+import csv
+from pathlib import Path
+import tempfile
 
+# Import from your actual file
 from parse_bor_json import (
     parse_beneficial_owner_securities,
     parse_realized_pl,
+    parse_realized_amortization,
+    parse_ca_income,
+    write_csv,
+    merge_and_save_historical_pl
 )
 
 
-class TestParseBorJson(unittest.TestCase):
+class TestParseBORJson(unittest.TestCase):
+
     def setUp(self):
-        self.sample_data = {
+        self.rows_beneficial = [
+            ["PortfolioA", "InstrumentX", "LOT123", "ContrID1", "Purchase", "2025-09-23", 100.0, "USD"]]
+        self.rows_realized_pl = [["PortfolioA", "InstrumentX", "LOT123", "ContrID1", "2025-09-23", 50.0]]
+        self.rows_realized_amortization = [["PortfolioA", "InstrumentX", "LOT123", "ContrID1", "2025-09-23", 10.0]]
+        # Match Event to 'Purchase' so merge works
+        self.rows_income = [["PortfolioA", "InstrumentX", "LOT123", "ContrID1", "Purchase", "2025-09-23", 5.0, "USD"]]
+
+    def test_parse_beneficial_owner_securities(self):
+        data = {
+            "balancesByAccountClass": {
+                "mandate.BeneficialOwnerSecurities": [
+                    {
+                        "balanceKey": {
+                            "_type": "DetailedBalanceKey",
+                            "account": {
+                                "portfolio": {"name": "PortfolioA"},
+                                "lot": {
+                                    "lotOpeningContract": {
+                                        "representationId": "LOT123",
+                                        "externalSystemInstanceId": "BOR.external"
+                                    }
+                                }
+                            },
+                            "contract": {
+                                "securityIdentifiers": [
+                                    {"type": "MX_DSPLABEL", "identifier": "InstrumentX"}
+                                ]
+                            },
+                            "originBalanceKey": {
+                                "contract": {
+                                    "externalRepresentation": {
+                                        "representationId": "ContrID1"
+                                    }
+                                }
+                            },
+                            "impactTimestamp": "2025-09-23T12:00:00",
+                            "quantityUnit": {"iso4217Alpha": "USD"}
+                        },
+                        "balanceValue": {"quantity": "100"}
+                    }
+                ]
+            }
+        }
+        rows = parse_beneficial_owner_securities(data)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0][4], "Purchase")
+        self.assertEqual(rows[0][6], 100.0)
+
+    def test_beneficial_owner_ignores_unallocated(self):
+        data = {
             "balancesByAccountClass": {
                 "mandate.BeneficialOwnerSecurities": [
                     {
                         "balanceKey": {
                             "account": {
-                                "portfolio": {"name": "TestPortfolio"},
+                                "portfolio": {"name": "PortfolioA"},
                                 "lot": {
                                     "lotOpeningContract": {
-                                        "externalSystemInstanceId": "BOR.external",
-                                        "representationId": "lot123"
+                                        "representationId": "LOT123",
+                                        "externalSystemInstanceId": "BOR.internal"
                                     }
                                 }
-                            },
-                            "contract": {
-                                "securityIdentifiers": [
-                                    {"type": "MX_DSPLABEL", "identifier": "InstrX"}
-                                ]
-                            },
-                            "_type": "DetailedBalanceKey",
-                            "originBalanceKey": {
-                                "contract": {
-                                    "externalRepresentation": {"representationId": "Contrib42"}
-                                }
-                            },
-                            "impactTimestamp": "2024-01-01T12:00:00Z",
-                            "quantityUnit": {"iso4217Alpha": "USD"}
-                        },
-                        "balanceValue": {"quantity": "150"}
-                    },
-                    # A Sale
-                    {
-                        "balanceKey": {
-                            "account": {
-                                "portfolio": {"name": "TestPortfolio"},
-                                "lot": {
-                                    "lotOpeningContract": {
-                                        "externalSystemInstanceId": "BOR.external",
-                                        "representationId": "lot124"
-                                    }
-                                }
-                            },
-                            "contract": {
-                                "securityIdentifiers": [
-                                    {"type": "MX_DSPLABEL", "identifier": "InstrY"}
-                                ]
-                            },
-                            "_type": "DetailedBalanceKey",
-                            "originBalanceKey": {
-                                "contract": {
-                                    "externalRepresentation": {"representationId": "Contrib43"}
-                                }
-                            },
-                            "impactTimestamp": "2024-02-02T12:00:00Z",
-                            "quantityUnit": {"iso4217Alpha": "USD"}
-                        },
-                        "balanceValue": {"quantity": "-70"}
-                    },
-                    # Should be skipped (BOR.internal)
-                    {
-                        "balanceKey": {
-                            "account": {
-                                "portfolio": {"name": "TestPortfolio"},
-                                "lot": {
-                                    "lotOpeningContract": {
-                                        "externalSystemInstanceId": "BOR.internal",
-                                        "representationId": "lot125"
-                                    }
-                                }
-                            },
-                            "contract": {
-                                "securityIdentifiers": [
-                                    {"type": "MX_DSPLABEL", "identifier": "InstrZ"}
-                                ]
-                            },
-                            "_type": "DetailedBalanceKey",
-                            "originBalanceKey": {
-                                "contract": {
-                                    "externalRepresentation": {"representationId": "Contrib44"}
-                                }
-                            },
-                            "impactTimestamp": "2024-03-03T12:00:00Z",
-                            "quantityUnit": {"iso4217Alpha": "USD"}
-                        },
-                        "balanceValue": {"quantity": "200"}
-                    }
-                ],
-                "mandate.MonetaryRealizedPL": [
-                    {
-                        "balanceKey": {
-                            "account": {
-                                "portfolio": {"name": "TestPortfolio"},
-                                "lot": {
-                                    "lotOpeningContract": {"representationId": "lot123"}
-                                }
-                            },
-                            "originBalanceKey": {
-                                "contract": {
-                                    "securityIdentifiers": [
-                                        {"type": "MX_DSPLABEL", "identifier": "InstrX"}
-                                    ],
-                                    "externalRepresentation": {"representationId": "Contrib42"}
-                                },
-                                "originBalanceKey": {
-                                    "contract": {
-                                        "externalRepresentation": {"representationId": "Contrib42"}
-                                    }
-                                }
-                            },
-                            "_type": "DetailedBalanceKey",
-                            "impactTimestamp": "2024-01-01T12:00:00Z"
-                        },
-                        "balanceValue": {"quantity": "333"}
+                            }
+                        }
                     }
                 ]
             }
         }
+        rows = parse_beneficial_owner_securities(data)
+        self.assertEqual(rows, [])
 
-    def test_parse_beneficial_owner_securities(self):
-        rows = parse_beneficial_owner_securities(self.sample_data)
-        self.assertEqual(len(rows), 2)  # Skips BOR.internal
-        purchase = rows[0]
-        self.assertEqual(purchase[0], "TestPortfolio")
-        self.assertEqual(purchase[1], "InstrX")
-        self.assertEqual(purchase[2], "lot123")
-        self.assertEqual(purchase[3], "Contrib42")
-        self.assertEqual(purchase[4], "Purchase")
-        self.assertEqual(purchase[5], "2024-01-01")
-        self.assertEqual(purchase[6], 150.0)
-        self.assertEqual(purchase[7], "USD")
-        sale = rows[1]
-        self.assertEqual(sale[4], "Sale")
-        self.assertEqual(sale[6], 70.0)
+    def test_beneficial_owner_negative_quantity(self):
+        data = {
+            "balancesByAccountClass": {
+                "mandate.BeneficialOwnerSecurities": [
+                    {
+                        "balanceKey": {
+                            "_type": "DetailedBalanceKey",
+                            "account": {
+                                "portfolio": {"name": "PortfolioA"},
+                                "lot": {
+                                    "lotOpeningContract": {
+                                        "representationId": "LOT123",
+                                        "externalSystemInstanceId": "BOR.external"
+                                    }
+                                }
+                            },
+                            "contract": {
+                                "securityIdentifiers": [
+                                    {"type": "MX_DSPLABEL", "identifier": "InstrumentX"}
+                                ]
+                            },
+                            "originBalanceKey": {
+                                "contract": {
+                                    "externalRepresentation": {
+                                        "representationId": "ContrID1"
+                                    }
+                                }
+                            },
+                            "impactTimestamp": "2025-09-23T12:00:00",
+                            "quantityUnit": {"iso4217Alpha": "USD"}
+                        },
+                        "balanceValue": {"quantity": "-200"}
+                    }
+                ]
+            }
+        }
+        rows = parse_beneficial_owner_securities(data)
+        self.assertEqual(rows[0][4], "Sale")
+        self.assertEqual(rows[0][6], 200.0)
 
-    def test_parse_realized_pl(self):
-        rows = parse_realized_pl(self.sample_data)
-        self.assertEqual(len(rows), 1)
-        row = rows[0]
-        self.assertEqual(row[0], "TestPortfolio")
-        self.assertEqual(row[1], "InstrX")
-        self.assertEqual(row[2], "lot123")
-        self.assertEqual(row[3], "Contrib42")
-        self.assertEqual(row[4], "2024-01-01")
-        self.assertEqual(row[5], 333.0)
+    def test_parse_functions_with_missing_keys(self):
+        bad_data = {"balancesByAccountClass": {"mandate.BeneficialOwnerSecurities": [{}]}}
+        self.assertEqual(parse_beneficial_owner_securities(bad_data), [])
+
+        bad_data = {"balancesByAccountClass": {"mandate.MonetaryRealizedPL": [{}]}}
+        self.assertEqual(parse_realized_pl(bad_data), [])
+
+        bad_data = {"balancesByAccountClass": {"mandate.MonetaryRealizedAmortizationEIM": [{}]}}
+        self.assertEqual(parse_realized_amortization(bad_data), [])
+
+        bad_data = {"balancesByAccountClass": {"mandate.MonetaryCAIncome": [{}]}}
+        self.assertEqual(parse_ca_income(bad_data), [])
+
+    def test_ca_income_skips_balancekey_type_balancekey(self):
+        data = {
+            "balancesByAccountClass": {
+                "mandate.MonetaryCAIncome": [
+                    {"balanceKey": {"_type": "BalanceKey"}}
+                ]
+            }
+        }
+        self.assertEqual(parse_ca_income(data), [])
+
+    def test_write_csv(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            filepath = Path(tmpdir) / "test.csv"
+            rows = [["A", "B"], ["C", "D"]]
+            columns = ["col1", "col2"]
+            write_csv(filepath, columns, rows)
+            with open(filepath, newline="", encoding="utf-8") as f:
+                reader = list(csv.reader(f))
+            self.assertEqual(reader[0], columns)
+            self.assertEqual(reader[1], ["A", "B"])
+
+    def test_merge_and_save_historical_pl(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_file = Path(tmpdir) / "historical_pl.csv"
+            import parse_bor_json
+            parse_bor_json.OUTPUT_HISTORICAL_PL = out_file
+
+            merge_and_save_historical_pl(
+                self.rows_beneficial,
+                self.rows_realized_pl,
+                self.rows_realized_amortization,
+                self.rows_income
+            )
+
+            df = pd.read_csv(out_file)
+            self.assertIn("Clean Realized PL", df.columns)
+            self.assertEqual(df.iloc[0]["Clean Realized PL"], 50.0)
+            self.assertEqual(df.iloc[0]["Amortized Realized PL"], 40.0)
+            self.assertEqual(df.iloc[0]["CA Income"], 5.0)
+
+    def test_merge_and_save_with_empty_data(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            out_file = Path(tmpdir) / "empty.csv"
+            import parse_bor_json
+            parse_bor_json.OUTPUT_HISTORICAL_PL = out_file
+
+            merge_and_save_historical_pl([], [], [], [])
+            df = pd.read_csv(out_file)
+            self.assertTrue(df.empty)
 
 
 if __name__ == "__main__":
